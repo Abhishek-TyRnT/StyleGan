@@ -21,6 +21,7 @@ from tensorflow.keras.layers import Reshape
 from tensorflow.keras.layers import UpSampling2D
 from tensorflow.keras.layers import AvgPool2D
 from tensorflow.keras.models import clone_model
+from tensorflow.keras.layers import Flatten
 
 #Mapping network for generating latent code
 #It is an 8 layer 
