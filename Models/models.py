@@ -161,13 +161,14 @@ class Discriminator(Model):
     self.block_no = 1
     self.discriminator = self.first_block()
   def first_block(self):
-    inp = Input(shape = (None,None,3))
+    inp = Input(shape = (4,4,3))
     network = Conv2D(512,(3,3),1,padding='SAME',kernel_initializer=RandomNormal(0,1))(inp)
     network = LeakyReLU(0.2)(network)
     network = Conv2D(512,(3,3),1,padding='SAME',kernel_initializer=RandomNormal(0,1))(network)
     network = LeakyReLU(0.2)(network)
-    network = AvgPool2D(pool_size=network.shape[1:-1])(network)
+    network = AvgPool2D(pool_size=(4,4))(network)
     network = Flatten()(network)
+    network = Dense(512,kernel_initializer= RandomNormal(0,1))(network) 
     network = Dense(1,kernel_initializer= RandomNormal(0,1))(network) 
     model = Model(inputs = inp,outputs = network)
     return model
