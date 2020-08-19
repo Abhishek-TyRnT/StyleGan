@@ -13,7 +13,7 @@ from tensorflow.keras.losses import Loss
 
 class Discriminator_loss(Loss):
   def __init__(self,lamb,batch_size=4,epsilon = 0.1):
-    super(Discriminaor_loss,self).__init__()
+    super(Discriminator_loss,self).__init__()
     self.lamb = lamb
     self.batch_size = batch_size
     self.epsilon = epsilon
