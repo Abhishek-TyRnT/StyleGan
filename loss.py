@@ -27,8 +27,7 @@ class Discriminator_loss(Loss):
       discriminator_output = discrimininator(x_cap)
       grad = tape.gradient(discriminator_output,x_cap)
       grad = tf.math.pow(grad,2)
-      grad_norm = tf.math.sqrt(tf.reduce_mean(grad))
+      grad_norm = tf.math.sqrt(tf.reduce_mean(grad,[1,2,3]))
       grad_penalty = self.lamb*(grad_norm)
-    loss += grad_penalty
+    loss += tf.reduce_mean(grad_penalty)
     return loss
-
