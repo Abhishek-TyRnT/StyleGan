@@ -166,6 +166,9 @@ class Discriminator(Model):
     network = LeakyReLU(0.2)(network)
     network = Conv2D(512,(3,3),1,padding='SAME',kernel_initializer=RandomNormal(0,1))(network)
     network = LeakyReLU(0.2)(network)
+    network = AvgPool2D(pool_size=network.shape[1:-1])(network)
+    network = Flatten()(network)
+    network = Dense(1,kernel_initializer= RandomNormal(0,1))(network) 
     model = Model(inputs = inp,outputs = network)
     return model
   
@@ -189,3 +192,4 @@ class Discriminator(Model):
   def call(self,inp):
     output = self.discriminator(inp)
     return output
+    
