@@ -168,7 +168,8 @@ class Discriminator(Model):
     network = LeakyReLU(0.2)(network)
     network = AvgPool2D(pool_size=(4,4))(network)
     network = Flatten()(network)
-    network = Dense(512,kernel_initializer= RandomNormal(0,1))(network) 
+    network = Dense(512,kernel_initializer= RandomNormal(0,1))(network)
+    network = LeakyReLU(0.2)(network)
     network = Dense(1,kernel_initializer= RandomNormal(0,1))(network) 
     model = Model(inputs = inp,outputs = network)
     return model
