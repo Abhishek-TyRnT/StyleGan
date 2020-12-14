@@ -24,7 +24,7 @@ from tensorflow.keras.models import clone_model
 from tensorflow.keras.layers import Flatten
 
 #Mapping network for generating latent code
-#It is an 8 layer 
+#It is an 8 layer Maaping Network
 def get_mapping_network(inp):
   x = Dense(512,kernel_initializer = RandomNormal(0,1.0))(inp)
   x = LeakyReLU(0.2)(x)
@@ -41,9 +41,36 @@ def get_mapping_network(inp):
   x = Dense(512,kernel_initializer = RandomNormal(0,1.0))(x)
   x = LeakyReLU(0.2)(x)
   x = Dense(512,kernel_initializer = RandomNormal(0,1.0))(x)
-  x = LeakyReLU(0.2,name = 'mapping_network_output')(x)
-  MAP_Network = Model(inputs = inp,outputs = x,name = 'Mapping_Network')
+  x = LeakyReLU(0.2,name = 'MappingNetworkOutput')(x)
+  MAP_Network = Model(inputs = inp,outputs = x)
   return MAP_Network
+
+
+class Mapping_Network(Model):
+  def __init__(self,block_no = 1,names = 'MappingNetwork'):
+    super(Mapping_Network,self).__init__(name = names)
+    inp                  = Input(shape = (512,),name = 'LatentInput')
+    self.block_no = block_no 
+    self.mapping_network = get_mapping_network(inp)
+  
+  def add_block(self):
+    self.block_no += 1
+  def call(self,inp1,inp2):
+    output_1     = self.mapping_network(inp1)
+    output_2     = self.mapping_network(inp2)
+    output_index = np.random.choice(range(2*self.block_no),size = (self.block_no),replace = False)
+    output       = {}
+    k            = 0
+    for i in range(self.block_no):
+      for j in range(2):
+        input_name = 'LatentInput' + str(j+1) + str(i+1)
+        if k in output_index:
+          output.update({input_name:output_1})
+        else:
+          output.update({input_name:output_2})
+        k += 1
+    
+    return output
 
 class AffineTransform(Layer):
   def __init__(self,fmaps,names = ''):
@@ -76,7 +103,7 @@ class AdaIn(Layer):
     return result   
   def normalize(self,fmaps,epsilon = 1e-8):
       mean = tf.reduce_mean(fmaps,[1,2],keepdims=True)
-      std = tf.sqrt(tf.reduce_mean((fmaps - mean)**2 + epsilon,[1,2],keepdims=True))
+      std  = tf.sqrt(tf.reduce_mean((fmaps - mean)**2 + epsilon,[1,2],keepdims=True))
 
       normalized = (fmaps- mean)/std
 
@@ -106,54 +133,66 @@ class Synthesis_block(Layer):
     return x
 
 def first_block():
-  const_input = Input(shape = (None,None,512),name = 'constant_input')
-  noise_input_1 = Input(shape = (None,None,512),name = 'noise1_1')
-  noise_input_2 = Input(shape = (None,None,512),name = 'noise2_1')
-  latent_input = Input(shape = (512),name = 'Latent_Input')
-  W = get_mapping_network(latent_input)(latent_input)
-  network = const_input + noise_input_1
-  transformed = AffineTransform(512)(W)
-  network = AdaIn(512,names = 'AdaIN1_1')(transformed,network)
-  network = Conv2D(512,kernel_size = (3,3),padding = 'SAME',kernel_initializer=RandomNormal(0,1))(network)
-  transformed = AffineTransform(512)(W)
-  network = AdaIn(512,names = 'AdaIN1_2')(transformed,network)
-  network = Conv2D(3,kernel_size = (3,3),padding = 'same',kernel_initializer=RandomNormal(0,1),activation = 'relu')(network)
-  model = Model(inputs = [const_input,noise_input_1,noise_input_2,latent_input],outputs = network)
+  const_input     = Input(shape =   (None,None,512),name = 'ConstantInput')
+  noise_input_1   = Input(shape = (None,None,512),name = 'Noise11')
+  noise_input_2   = Input(shape = (None,None,512),name = 'Noise21')
+  latent_input_1  = Input(shape = (512,),name = 'LatentInput11')
+  latent_input_2  = Input(shape = (512,),name = 'LatentInput21')
+  network         = const_input + noise_input_1
+  transformed     = AffineTransform(512)(latent_input_1)
+  network         = AdaIn(512,names = 'AdaIN11')(transformed,network)
+  network         = Conv2D(512,kernel_size = (3,3),padding = 'SAME',kernel_initializer=RandomNormal(0,1))(network)
+  transformed     = AffineTransform(512)(latent_input_2)
+  network         = AdaIn(512,names = 'AdaIN12')(transformed,network)
+  network         = Conv2D(3,kernel_size = (3,3),padding = 'same',kernel_initializer=RandomNormal(0,1),activation = 'relu')(network)
+  model           = Model(inputs = [const_input,noise_input_1,noise_input_2,latent_input_1,latent_input_2],outputs = network)
   return model
 
 def add_new_block(old_model,block_no):
   inputs = old_model.inputs
   def no_of_filters(stage):
      return min(int(8192/(2**(stage+2))),512)
-  latent_output = old_model.get_layer('Mapping_Network').output
-  noise_input_1 = Input(shape = (None,None,None),name = 'noise1_'+str(block_no))
-  noise_input_2 = Input(shape = (None,None,None),name = 'noise2_'+str(block_no))
-  transformed1 = AffineTransform(no_of_filters(block_no))(latent_output)
-  transformed2 = AffineTransform(no_of_filters(block_no))(latent_output)
-  network = old_model.layers[-1].input
-  network  = Synthesis_block(block_no)(network,noise_input_1,noise_input_2,transformed1,transformed2)
-  network = Conv2D(filters = 3,kernel_size=(1,1),padding = 'SAME',name = 'to_rgb_'+str(block_no),activation='relu')(network)
-  new_model = Model(inputs = inputs + [noise_input_1,noise_input_2],outputs = network)
+  latent_input_1 = Input(shape = (512,),name = 'LatentInput1'+str(block_no))
+  latent_input_2 = Input(shape = (512,),name = 'LatentInput2'+str(block_no))
+  noise_input_1  = Input(shape = (None,None,None),name = 'Noise1'+str(block_no))
+  noise_input_2  = Input(shape = (None,None,None),name = 'Noise2'+str(block_no))
+  transformed1   = AffineTransform(no_of_filters(block_no))(latent_input_1)
+  transformed2   = AffineTransform(no_of_filters(block_no))(latent_input_2)
+  network        = old_model.layers[-1].input
+  network        = Synthesis_block(block_no)(network,noise_input_1,noise_input_2,transformed1,transformed2)
+  network        = Conv2D(filters = 3,kernel_size=(1,1),padding = 'SAME',name = 'to_rgb_'+str(block_no),activation='relu')(network)
+  new_model      = Model(inputs = inputs + [noise_input_1,noise_input_2,latent_input_1,latent_input_2],outputs = network)
   return new_model
 
 class Generator(Model):
   def __init__(self,names = 'Generator'):
     super(Generator,self).__init__(name = names)
     self.model = first_block()
+    self.mapping_network = Mapping_Network()
     self.block_no = 1
   
   def call(self,inps,**kwargs):
     model_inputs = self.model.inputs
     inputs = []
+    latent_inputs = inps['LatentInput']
+    latent_inputs = self.mapping_network(latent_inputs[0],latent_inputs[1])
+    inps.update(latent_inputs)
+    inputs = {}
     for input in model_inputs:
       name = input.name
-      name = name[:(len(name)-name[::-1].index('_')-1)]
-      inputs.append(inps[name])
+      print(name,end = "  ")
+      try:
+        name = name[:(name.index('_'))]
+      except:
+        name = name[:(name.index(':'))]
+      print(name)
+      inputs[name] = inps[name]
     return self.model(inputs)
     
   def increase_resolution(self):
     new_model = add_new_block(self.model,block_no = self.block_no+1)
     self.block_no+=1
+    self.mapping_network.add_block()
     self.model = new_model
 
 class Discriminator(Model):
